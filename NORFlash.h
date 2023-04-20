@@ -107,7 +107,7 @@ class NORFlash {
       SPI.transfer(0x00);
       SPI.transfer(0x00); //Start at address zero
       //Loop for the entire density of the chip, if any byte is not 0xAA then report as an error
-      for (int i = 0; i < this->density; i++){
+      for (int i = 0; i < this->density*10; i++){
         uint8_t data = SPI.transfer(0x00);
         if (data != 0xAA){
           this->error_bytes++;
@@ -147,7 +147,7 @@ class NORFlash {
       uint8_t remember_me = 0xAA;
 
       //Bytes must be written in batches of 265 bytes (one page)
-      for (uint32_t i = 0; i < this->density; i+=265){
+      for (uint32_t i = 0; i < this->density*10; i+=265){
         digitalWrite(this->cs, LOW);  
         SPI.transfer(WREN); //Write Enable (must be enabled before every command)
         digitalWrite(this->cs, HIGH);
@@ -225,9 +225,11 @@ class NORFlash {
         //What is the density?
         switch(this->density_code) {
           case 0x18:
+            this->part_number += "128";
             this->density = 128;
             break;
           case 0x19:
+            this->part_number += "256";
             this->density = 256;
             break;
           default:
@@ -253,27 +255,27 @@ class NORFlash {
         switch(this->density_code) {
           case 0x17:
             this->density = 64;
-            this->part_number += '64M';
+            this->part_number += "64M";
             break;
           case 0x18:
             this->density = 128;
-            this->part_number += '128M';
+            this->part_number += "128M";
             break;
           case 0x19:
             this->density = 256;
-            this->part_number += '256M';
+            this->part_number += "256M";
             break;
           case 0x20:
             this->density = 512;
-            this->part_number += '512M';
+            this->part_number += "512M";
             break;
           case 0x21:
             this->density = 1000;
-            this->part_number += '1G';
+            this->part_number += "1G";
             break;
           case 0x22:
             this->density = 2000;
-            this->part_number += '2G';
+            this->part_number += "2G";
             break;
           default:
             this->part_number = "Unknown";
