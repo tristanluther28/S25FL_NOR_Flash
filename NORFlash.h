@@ -76,8 +76,8 @@ class NORFlash {
     uint8_t device_type;
     uint8_t density_code;
     uint16_t block_size;
-    uint64_t error_bytes;
-    uint32_t bytes_covered = 0;
+    int error_bytes;
+    int bytes_covered = 0;
     String part_number;
     String mfg;
     uint16_t density = 0;
@@ -117,7 +117,7 @@ class NORFlash {
       SPI.transfer(0x00);
       SPI.transfer(0x00); //Start at address zero
       //Loop for the entire density of the chip, if any byte is not 0xAA then report as an error
-      for (int i = 0; i < this->density*1000000; i++){
+      for (int i = 0; i < pow(this->density, 3); i++){
         uint8_t data = SPI.transfer(0x00);
         if (data != 0xAA){
           this->error_bytes++;
@@ -159,7 +159,7 @@ class NORFlash {
       uint8_t remember_me = 0xAA;
       this->bytes_covered = 0;
       //Bytes must be written in batches of 265 bytes (one page)
-      for (uint32_t i = 0; i < this->density*1000000; i+=128){
+      for (uint32_t i = 0; i < pow(this->density, 3); i+=128){
         digitalWrite(this->cs, LOW);  
         SPI.transfer(WREN); //Write Enable (must be enabled before every command)
         digitalWrite(this->cs, HIGH);

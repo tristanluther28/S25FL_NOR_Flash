@@ -108,16 +108,16 @@ void print_screen(){
   }
   if (mem->mode == "Read" || mem->mode == "Write"){
     //Number of complete 
-    double complete = ((mem->bytes_covered/(mem->density*1000000))*100);
+    double complete = ((mem->bytes_covered/(pow(mem->density, 3)))*100);
     Serial.print("Bytes covered         : ");
     if (mem->bytes_covered == 0){
       Serial.print("0/");
-      Serial.println(mem->density*1000000);
+      Serial.println((int) pow(mem->density, 3));
     }
     else{
       Serial.print(mem->bytes_covered);
       Serial.print("/");
-      Serial.println(mem->density*1000000);
+      Serial.println((int) pow(mem->density, 3));
     }
     Serial.println("");
     Serial.print(" ");
