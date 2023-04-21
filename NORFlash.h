@@ -9,6 +9,10 @@
 #define RDSR1 0x05 // Read Status Register 1 (S25FL Only)
 #define RDSR2 0x07 // Read Status Register 2 (S25FL Only)
 #define RDSCUR 0x2B //Read Security Register (MX66L Only)
+#define RFSR 0x70 //Read Flag Status Register (MT25 Only)
+
+#define EN4B 0xB7 //Enable 4-byte address mode
+#define EX4B 0xE9 //Exit 4-byte address mode
 
 // Register Access
 #define RDSR 0x05 // Read Status Register
@@ -54,6 +58,8 @@
 #define WEL 1 //Write Enable Latch
 #define E_ERR 6 //Erase Error Occurred (1 == Error)
 #define P_ERR 5 //Programming Error Occurred (1 == Error)
+#define E_ERR_MT25 5
+#define P_ERR_MT25 4
 
 class NORFlash {
   private:
@@ -69,7 +75,9 @@ class NORFlash {
     uint8_t mfg_id;
     uint8_t device_type;
     uint8_t density_code;
+    uint16_t block_size;
     uint64_t error_bytes;
+    uint32_t bytes_covered = 0;
     String part_number;
     String mfg;
     uint16_t density = 0;
@@ -100,22 +108,25 @@ class NORFlash {
     void read(){
       this->mode = "Read";
       this->error_bytes = 0;
+      this->bytes_covered = 0;
       //Read everything out of memory, expect to see 0xAA for each byte, if not then add to error count
       digitalWrite(this->cs, LOW);
       SPI.transfer(READ);
       SPI.transfer(0x00);
       SPI.transfer(0x00);
+      SPI.transfer(0x00);
       SPI.transfer(0x00); //Start at address zero
       //Loop for the entire density of the chip, if any byte is not 0xAA then report as an error
-      for (int i = 0; i < this->density*10; i++){
+      for (int i = 0; i < this->density*1000000; i++){
         uint8_t data = SPI.transfer(0x00);
         if (data != 0xAA){
           this->error_bytes++;
         }
+        this->bytes_covered++;
       }
     }
     
-    void write_byte(uint8_t save_me, uint64_t addr){
+    void write_byte(uint8_t save_me, uint32_t addr){
       /*
         Notes on Program Flash Array Section 8.5
           Page Programming allows up to a page size of 256 bytes in one operation
@@ -134,6 +145,7 @@ class NORFlash {
       digitalWrite(this->cs, HIGH);
       digitalWrite(this->cs, LOW); 
       SPI.transfer(PP);
+      SPI.transfer((addr >> 24) & 0xFF);
       SPI.transfer((addr >> 16) & 0xFF);
       SPI.transfer((addr >> 8) & 0xFF);
       SPI.transfer(addr & 0xFF);
@@ -143,21 +155,25 @@ class NORFlash {
 
     void write(){
       this->mode = "Write";
-      //Write aleternating bits to every byte of memory on the chip
+      //Write alternating bits to every byte of memory on the chip
       uint8_t remember_me = 0xAA;
-
+      this->bytes_covered = 0;
       //Bytes must be written in batches of 265 bytes (one page)
-      for (uint32_t i = 0; i < this->density*10; i+=265){
+      for (uint32_t i = 0; i < this->density*1000000; i+=128){
         digitalWrite(this->cs, LOW);  
         SPI.transfer(WREN); //Write Enable (must be enabled before every command)
         digitalWrite(this->cs, HIGH);
+        read_status();
+        this->mode = "Write";
         digitalWrite(this->cs, LOW); 
         SPI.transfer(PP);
+        SPI.transfer((i >> 24) & 0xFF);
         SPI.transfer((i >> 16) & 0xFF);
         SPI.transfer((i >> 8) & 0xFF);
         SPI.transfer(i & 0xFF);
         for (int j = 0; j < 256; j++){
           SPI.transfer(remember_me);
+          this->bytes_covered++;
         }
         digitalWrite(this->cs, HIGH);        
       }
@@ -167,15 +183,21 @@ class NORFlash {
       this->mode = "Software Reset";
       digitalWrite(this->cs, LOW);
       SPI.transfer(RSTEN);
+      delay(10);
       SPI.transfer(RST);
       digitalWrite(this->cs, HIGH);
+      enable_four_byte_addr();
     }
 
     void hardware_reset(){
       this->mode = "Hardware Reset";
+      digitalWrite(this->cs, HIGH);
+      delay(1);
       digitalWrite(this->reset, LOW);
       delay(10);
       digitalWrite(this->reset, HIGH);
+      delay(1000);
+      enable_four_byte_addr();
     }
 
     void read_id(){
@@ -203,7 +225,7 @@ class NORFlash {
         //What is the density?
         switch(this->density_code) {
           case 0x1B:
-            this->density = 1000;
+            this->density = 1024;
             break;
           default:
             this->part_number = "Unknown";
@@ -270,11 +292,11 @@ class NORFlash {
             this->part_number += "512M";
             break;
           case 0x21:
-            this->density = 1000;
+            this->density = 1024;
             this->part_number += "1G";
             break;
           case 0x22:
-            this->density = 2000;
+            this->density = 2048;
             this->part_number += "2G";
             break;
           default:
@@ -325,13 +347,31 @@ class NORFlash {
         this->e_err = (status2 >> E_ERR) & 0x1;
       }
       else if (this->mfg_id == 0x20){
-        // TODO This is a Micron part
-        
+        //This is a Micron part
+        digitalWrite(cs, LOW);
+        SPI.transfer(RDSR);
+        uint8_t status1 = SPI.transfer(0x00);
+        digitalWrite(cs, HIGH);
+        this->wip = (status1 >> WIP) & 0x1;
+        this->wel = (status1 >> WEL) & 0x1;
+        digitalWrite(cs, LOW);
+        SPI.transfer(RFSR);
+        uint8_t status2 = SPI.transfer(0x00);
+        digitalWrite(cs, HIGH);
+        this->p_err = (status2 >> P_ERR_MT25) & 0x1;
+        this->e_err = (status2 >> E_ERR_MT25) & 0x1;
       }
       if (this->wip == 0 && (this->mode == "Erase" || this->mode == "Write")){
         this->mode = "Standby";
       }
 
+    }
+
+    void enable_four_byte_addr(){
+      //Enable 4-byte addressing mode
+      digitalWrite(cs, LOW);
+      SPI.transfer(EN4B);
+      digitalWrite(cs, HIGH);
     }
 
     NORFlash(pin_size_t sck, pin_size_t sdi, pin_size_t sdo, pin_size_t reset, pin_size_t cs, pin_size_t wp){
@@ -344,7 +384,7 @@ class NORFlash {
       //Change the SPI Settings to allow Clock Frequency of 10MHz (absolute max per datasheet is 133MHz)
       //Most Significant Bit First
       //Data Mode 0 (Clock Polarity = 0 and Clock Phase Angle = 0)
-      SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
+      SPI.beginTransaction(SPISettings(50000000, MSBFIRST, SPI_MODE0));
       SPI.setCS(cs);  
       SPI.setSCK(sck);
       SPI.setRX(sdi);
@@ -358,5 +398,7 @@ class NORFlash {
       digitalWrite(reset, HIGH);  
       this->mode = "Standby";
       read_id();
+      //Enable 4-byte addressing mode
+      enable_four_byte_addr();
     }
 };

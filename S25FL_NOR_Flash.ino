@@ -46,10 +46,10 @@ void print_screen(){
   Serial.println("");
   Serial.println("--------------------------- Status -------------------------");
   Serial.println("");
-  Serial.print("Mode               : ");
+  Serial.print("Mode                  : ");
   Serial.print(mem->mode);
   Serial.println("");
-  Serial.print("Write In Progress  : ");
+  Serial.print("Write In Progress     : ");
   if (mem->wip){
     Serial.print("True ");
     switch(loop_cnt){
@@ -76,21 +76,21 @@ void print_screen(){
   else{
     Serial.println("False");
   }
-  Serial.print("Write Enable Latch : ");
+  Serial.print("Write Enable Latch    : ");
   if (mem->wel){
     Serial.println("True");
   }
   else{
     Serial.println("False");
   }
-  Serial.print("Program Error      : ");
+  Serial.print("Program Error         : ");
   if (mem->p_err){
     Serial.println("True");
   }
   else{
     Serial.println("False");
   }
-  Serial.print("Erase Error        : ");
+  Serial.print("Erase Error           : ");
   if (mem->e_err){
     Serial.println("True");
   }
@@ -99,10 +99,41 @@ void print_screen(){
   }
   if (mem->mode == "Read"){
     Serial.print("Incorrect Bytes found : ");
-    Serial.println(mem->error_bytes);
+    if (mem->error_bytes == 0){
+      Serial.println("0");
+    }
+    else{
+      Serial.println(mem->error_bytes);
+    }
   }
-  else{
-
+  if (mem->mode == "Read" || mem->mode == "Write"){
+    //Number of complete 
+    double complete = ((mem->bytes_covered/(mem->density*1000000))*100);
+    Serial.print("Bytes covered         : ");
+    if (mem->bytes_covered == 0){
+      Serial.print("0/");
+      Serial.println(mem->density*1000000);
+    }
+    else{
+      Serial.print(mem->bytes_covered);
+      Serial.print("/");
+      Serial.println(mem->density*1000000);
+    }
+    Serial.println("");
+    Serial.print(" ");
+    Serial.print(complete);
+    Serial.print("% [");
+    for (int i = 0; i < 100; i++){
+      if (i % 2 == 0){
+        if (i <= complete){
+          Serial.print("#");
+        }
+        else{
+          Serial.print(".");
+        }
+      }
+    }
+    Serial.println("]");
   }
   Serial.println("");
   Serial.println("--------------------- SpaceX (c) 2023 ----------------------");
@@ -110,19 +141,22 @@ void print_screen(){
 }
 
 void setup() {
+
   // Begin the Serial Port for Debugging
   Serial.begin(9600);
 
-  delay(3000);  //Give everything a moment
+  delay(2000);  //Give everything a moment
 
   //Init NOR Flash
   mem = new NORFlash(sck, sdi, sdo, reset, cs, write_protect);
+
+  delay(1000);  //Give everything a moment
 
   //On-board LED
   pinMode(LED_BUILTIN, OUTPUT);
   delay(3000);  //Give everything another moment
 
-  print_screen();
+  //print_screen();
 }
 
 void loop() {
@@ -157,8 +191,15 @@ void loop() {
   }
   mem->read_status();
 
+}
+
+void setup1(){
+  delay(3000);
+  Serial.println("Core 1 Online");
+}
+
+void loop1(){
   //Update the screen
   print_screen();
   delay(100);
-
 }
