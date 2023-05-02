@@ -176,6 +176,7 @@ void print_screen(){
           Serial.print(i);
           Serial.print(" in Sector #");
           Serial.print(sector_count);
+          Serial.print(": ");
           red_text();
           Serial.println(mem->block_verbose[i], HEX);
           default_text();
