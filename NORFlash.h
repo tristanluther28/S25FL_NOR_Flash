@@ -75,7 +75,11 @@ class NORFlash {
     uint8_t mfg_id;
     uint8_t device_type;
     uint8_t density_code;
-    uint16_t block_size;
+    uint16_t page_size = 256;
+    uint32_t block_size = 65536;
+    uint16_t sector_size = 4096;
+    uint8_t current_sector = 0;
+    uint8_t block_verbose[65536];
     int error_bytes;
     int bytes_covered = 0;
     String part_number;
@@ -109,6 +113,7 @@ class NORFlash {
       this->mode = "Read";
       this->error_bytes = 0;
       this->bytes_covered = 0;
+      this->current_sector = 0;
       //Read everything out of memory, expect to see 0xAA for each byte, if not then add to error count
       digitalWrite(this->cs, LOW);
       SPI.transfer(READ);
@@ -117,12 +122,17 @@ class NORFlash {
       SPI.transfer(0x00);
       SPI.transfer(0x00); //Start at address zero
       //Loop for the entire density of the chip, if any byte is not 0xAA then report as an error
-      for (int i = 0; i < pow(this->density, 3); i++){
+      for (int i = 0; i < this->block_size; i++){
+        //Check if we are in a new sector
+        if(i % this->sector_size == 0){
+          this->current_sector++;
+        }
         uint8_t data = SPI.transfer(0x00);
         if (data != 0xAA){
           this->error_bytes++;
         }
         this->bytes_covered++;
+        this->block_verbose[i] = data;
       }
     }
     
@@ -158,8 +168,13 @@ class NORFlash {
       //Write alternating bits to every byte of memory on the chip
       uint8_t remember_me = 0xAA;
       this->bytes_covered = 0;
+      this->current_sector = 0;
       //Bytes must be written in batches of 265 bytes (one page)
-      for (uint32_t i = 0; i < pow(this->density, 3); i+=128){
+      for (uint32_t i = 0; i < this->block_size; i+=128){
+        //Check if we are in a new sector
+        if(i % this->sector_size == 0){
+          this->current_sector++;
+        }
         digitalWrite(this->cs, LOW);  
         SPI.transfer(WREN); //Write Enable (must be enabled before every command)
         digitalWrite(this->cs, HIGH);

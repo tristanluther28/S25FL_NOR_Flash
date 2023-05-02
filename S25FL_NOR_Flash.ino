@@ -12,6 +12,7 @@ String last_mode; //Current Operating Mode to display
 static char command = 0; //Command issued by the user
 static NORFlash* mem;
 static int loop_cnt = 0;
+static bool verbose = false;
 
 //Global functions
 void clear_screen(){
@@ -20,6 +21,21 @@ void clear_screen(){
   Serial.print("[2J"); //clear screen command
   Serial.write(27);
   Serial.print("[H"); //cursor to home command
+}
+
+void red_text(){
+  Serial.write(27); //ESC command
+  Serial.print("[0;31m"); //clear screen command
+}
+
+void green_text(){
+  Serial.write(27); //ESC command
+  Serial.print("[0;32m"); //clear screen command
+}
+
+void default_text(){
+  Serial.write(27); //ESC command
+  Serial.print("[0;39m"); //clear screen command
 }
 
 void print_screen(){
@@ -31,7 +47,7 @@ void print_screen(){
     Serial.println("Error: Incorrect unable to identify chip. Please Power Cycle/Check SPI Interface.");
     for(;;){}
   }
-  Serial.println("---------------------- NOR Flash Tester --------------------");
+  Serial.println("-------------------------------- NOR Flash Tester -----------------------------");
   Serial.println("");
   Serial.print("Part Number  : ");
   Serial.println(mem->part_number);
@@ -40,11 +56,11 @@ void print_screen(){
   Serial.print("Density (MB) : ");
   Serial.println(mem->density);
   Serial.println("");
-  Serial.println("------------------------- Commands -------------------------");
+  Serial.println("----------------------------------- Commands ----------------------------------");
   Serial.println("");
-  Serial.println("(1)-Erase | (2)-Read | (3)-Write | (4)-SWReset | (5)-HWReset");
+  Serial.println("(1)-Erase | (2)-Read | (3)-Verbose Read | (3)-Write | (4)-SWReset | (5)-HWReset");
   Serial.println("");
-  Serial.println("--------------------------- Status -------------------------");
+  Serial.println("------------------------------------ Status -----------------------------------");
   Serial.println("");
   Serial.print("Mode                  : ");
   Serial.print(mem->mode);
@@ -100,24 +116,35 @@ void print_screen(){
   if (mem->mode == "Read"){
     Serial.print("Incorrect Bytes found : ");
     if (mem->error_bytes == 0){
+      green_text();
       Serial.println("0");
+      default_text();
     }
     else{
+      red_text();
       Serial.println(mem->error_bytes);
+      default_text();
     }
   }
   if (mem->mode == "Read" || mem->mode == "Write"){
+    Serial.print("Current Sector (4KB)  : ");
+    if (mem->current_sector == 0){
+      Serial.println("0");
+    }
+    else{
+      Serial.println(mem->current_sector);
+    }
     //Number of complete 
-    double complete = ((mem->bytes_covered/(pow(mem->density, 3)))*100);
+    double complete = ((mem->bytes_covered/(mem->block_size))*100);
     Serial.print("Bytes covered         : ");
     if (mem->bytes_covered == 0){
       Serial.print("0/");
-      Serial.println((int) pow(mem->density, 3));
+      Serial.println((int) mem->block_size);
     }
     else{
       Serial.print(mem->bytes_covered);
       Serial.print("/");
-      Serial.println((int) pow(mem->density, 3));
+      Serial.println((int) mem->block_size);
     }
     Serial.println("");
     Serial.print(" ");
@@ -136,7 +163,33 @@ void print_screen(){
     Serial.println("]");
   }
   Serial.println("");
-  Serial.println("--------------------- SpaceX (c) 2023 ----------------------");
+  if (mem->mode == "Read" && verbose){
+    Serial.println("Block Data (expect all 0xAA):");
+    if(mem->error_bytes != 0){
+      int sector_count = 0;
+      for (int i = 0; i < mem->block_size; i++){
+        if(i % mem->sector_size == 0){
+          sector_count++;
+        }
+        if (mem->block_verbose[i] != 0xAA){
+          Serial.print("Error bytes found: Byte #");
+          Serial.print(i);
+          Serial.print(" in Sector #");
+          Serial.print(sector_count);
+          red_text();
+          Serial.println(mem->block_verbose[i], HEX);
+          default_text();
+        }
+      }
+    }
+    else{
+      green_text();
+      Serial.println("All bytes correct!");
+      default_text();
+    }
+    Serial.println("");
+  }
+  Serial.println("------------------------------ SpaceX (c) 2023 -----------------------------");
   Serial.print("\r");
 }
 
@@ -171,15 +224,20 @@ void loop() {
         mem->erase();
         break;
       case '2':
+        verbose = false;
         mem->read();
         break;
       case '3':
-        mem->write();
+        verbose = true;
+        mem->read();
         break;
       case '4':
-        mem->software_reset();
+        mem->write();
         break;
       case '5':
+        mem->software_reset();
+        break;
+      case '6':
         mem->hardware_reset();
         break;
       default:
