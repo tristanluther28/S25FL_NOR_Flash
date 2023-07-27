@@ -2,8 +2,10 @@
 
 // Global pin names/variables
 static pin_size_t write_protect = 21;
-static pin_size_t reset = 20;
-static pin_size_t cs = 17;
+static pin_size_t reset = 22;
+static pin_size_t cs1 = 17; //CS1 - 17 | CS2 - 5 | CS3 - 21
+static pin_size_t cs2 = 5;
+static pin_size_t cs3 = 21;
 static pin_size_t sck = 18;
 static pin_size_t sdo = 19;
 static pin_size_t sdi = 16;
@@ -43,10 +45,6 @@ void print_screen(){
   if (mem->part_number != "Unknown"){
     digitalWrite(LED_BUILTIN, HIGH);
   }
-  else{
-    Serial.println("Error: Incorrect unable to identify chip. Please Power Cycle/Check SPI Interface.");
-    for(;;){}
-  }
   Serial.println("-------------------------------- NOR Flash Tester -----------------------------");
   Serial.println("");
   Serial.print("Part Number  : ");
@@ -55,10 +53,14 @@ void print_screen(){
   Serial.println(mem->mfg);
   Serial.print("Density (MB) : ");
   Serial.println(mem->density);
+  Serial.print("Target DUT   : DUT");
+  Serial.println(mem->dut);
+  //Serial.print("TEMP         : ");
+  //Serial.println(mem->tmp, HEX);
   Serial.println("");
   Serial.println("----------------------------------- Commands ----------------------------------");
   Serial.println("");
-  Serial.println("(1)-Erase | (2)-Read | (3)-Verbose Read | (3)-Write | (4)-SWReset | (5)-HWReset");
+  Serial.println("(1)-Block Erase | (2)-Read | (3)-Verbose Read | (4)-Write | (5)-SWReset | (6)-HWReset | (7)-CS1 | (8)-CS2 | (9)-CS3");
   Serial.println("");
   Serial.println("------------------------------------ Status -----------------------------------");
   Serial.println("");
@@ -196,21 +198,19 @@ void print_screen(){
 
 void setup() {
 
+  //On-board LED
+  pinMode(LED_BUILTIN, OUTPUT);
+
   // Begin the Serial Port for Debugging
   Serial.begin(9600);
 
-  delay(2000);  //Give everything a moment
-
-  //Init NOR Flash
-  mem = new NORFlash(sck, sdi, sdo, reset, cs, write_protect);
-
   delay(1000);  //Give everything a moment
 
-  //On-board LED
-  pinMode(LED_BUILTIN, OUTPUT);
-  delay(3000);  //Give everything another moment
+  //Init NOR Flash
+  mem = new NORFlash(sck, sdi, sdo, reset, cs1, cs2, cs3, write_protect);
 
-  //print_screen();
+  delay(1000);  //Give everything a moment
+  print_screen();
 }
 
 void loop() {
@@ -222,7 +222,7 @@ void loop() {
     //Interpret the command and change the operating mode of the device
     switch(command){
       case '1':
-        mem->erase();
+        mem->block_erase();
         break;
       case '2':
         verbose = false;
@@ -241,6 +241,15 @@ void loop() {
       case '6':
         mem->hardware_reset();
         break;
+      case '7':
+        mem->set_chip_select(cs1, 1);
+        break;
+      case '8':
+        mem->set_chip_select(cs2, 2);
+        break;
+      case '9':
+        mem->set_chip_select(cs3, 3);
+        break;
       default:
         __asm__("nop");
     }
@@ -248,6 +257,7 @@ void loop() {
     //Remain in this mode until the memory WIP bit is back to 0, then enter standby mode
     
   }
+  mem->read_id();
   mem->read_status();
 
 }
