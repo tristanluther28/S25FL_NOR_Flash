@@ -48,8 +48,12 @@ void print_screen(){
   Serial.println("-------------------------------- NOR Flash Tester -----------------------------");
   Serial.println("");
   Serial.print("Part Number  : ");
+  Serial.print(mem->device_type);
+  Serial.print(" ");
   Serial.println(mem->part_number);
   Serial.print("Manufacturer : ");
+  Serial.print(mem->mfg_id);
+  Serial.print(" ");
   Serial.println(mem->mfg);
   Serial.print("Density (MB) : ");
   Serial.println(mem->density);

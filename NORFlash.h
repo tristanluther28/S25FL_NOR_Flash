@@ -116,7 +116,6 @@ class NORFlash {
       SPI.transfer(BE);
       SPI.transfer(0x00);
       SPI.transfer(0x00);
-      SPI.transfer(0x00);
       SPI.transfer(0x00); //Start at address zero
       digitalWrite(this->cs, HIGH);
     }
@@ -139,8 +138,7 @@ class NORFlash {
       this->current_sector = 0;
       //Read everything out of memory, expect to see 0xAA for each byte, if not then add to error count
       digitalWrite(this->cs, LOW);
-      SPI.transfer(READ4B);
-      SPI.transfer(0x00);
+      SPI.transfer(READ);
       SPI.transfer(0x00);
       SPI.transfer(0x00);
       SPI.transfer(0x00); //Start at address zero
@@ -179,7 +177,6 @@ class NORFlash {
       digitalWrite(this->cs, HIGH);
       digitalWrite(this->cs, LOW); 
       SPI.transfer(PP);
-      SPI.transfer((addr >> 24) & 0xFF);
       SPI.transfer((addr >> 16) & 0xFF);
       SPI.transfer((addr >> 8) & 0xFF);
       SPI.transfer(addr & 0xFF);
@@ -205,8 +202,7 @@ class NORFlash {
         read_status();
         this->mode = "Write";
         digitalWrite(this->cs, LOW); 
-        SPI.transfer(PP4_MICRON);
-        SPI.transfer((i >> 24) & 0xFF);
+        SPI.transfer(PP);
         SPI.transfer((i >> 16) & 0xFF);
         SPI.transfer((i >> 8) & 0xFF);
         SPI.transfer(i & 0xFF);
@@ -233,7 +229,7 @@ class NORFlash {
       delay(10);
       SPI.transfer(RST);
       digitalWrite(this->cs, HIGH);
-      enable_four_byte_addr();
+      //enable_four_byte_addr();
     }
 
     void hardware_reset(){
@@ -244,10 +240,11 @@ class NORFlash {
       delay(10);
       digitalWrite(this->reset, HIGH);
       delay(1000);
-      enable_four_byte_addr();
+      //enable_four_byte_addr();
     }
 
     void read_id(){
+      //enable_four_byte_addr();
       //Try to read the chip id to determine who we are
       digitalWrite(this->cs, LOW);
       SPI.transfer(RDID); // Read Idenfification
@@ -296,6 +293,40 @@ class NORFlash {
             this->part_number = "Unknown";
         }
 
+      }
+      else if (this->mfg_id == 0x9D){
+        this->mfg = "ISSI";
+        //What is the device type
+        switch(this->device_type) {
+          case 0x60:
+            this->part_number += "IS25LE";
+            this->density = 256;
+            break;
+          case 0x70:
+            this->part_number += "IS25WE";
+            this->density = 128;
+            break;
+          default:
+            this->part_number += "UNK";
+            this->density = 128;
+            this->tmp = this->density_code;
+        }
+        //What is the density type
+        switch(this->density_code) {
+          case 0x19:
+            this->part_number += "256E";
+            this->density = 256;
+            break;
+          case 0x18:
+            this->part_number += "128E";
+            this->density = 128;
+            break;
+          default:
+            this->part_number += "128E";
+            this->density = 128;
+            this->tmp = this->density_code;
+        }
+        
       }
       else if (this->mfg_id == 0x01 || this->mfg_id == 0x34){
         //This is an Infineon part
@@ -499,6 +530,6 @@ class NORFlash {
       this->mode = "Standby";
       read_id();
       //Enable 4-byte addressing mode
-      enable_four_byte_addr();
+      //enable_four_byte_addr();
     }
 };
